@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Knewsfeed Proof of Concept</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    h1, h2 {
+      color: #333;
+    }
+    .summary, .quiz, .audio, .article-details, #spinner {
+      display: none; /* Initially hidden */
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin-top: 20px;
+    }
+    /* Spinner styles */
+    #spinner {
+      margin-top: 20px;
+      border: 8px solid #f3f3f3;
+      border-radius: 50%;
+      border-top: 8px solid #3498db;
+      width: 60px;
+      height: 60px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <h1>Knewsfeed Proof of Concept</h1>
+  
+  <!-- Start Button -->
+  <div id="startScreen">
+    <button id="startButton">Are you ready? Click here to start!</button>
+  </div>
+  
+  <!-- Spinner -->
+  <div id="spinner"></div>
+
+  <!-- Article Details -->
+  <div class="article-details">
+    <h2>Article Headline:</h2>
+    <p id="headline">Loading headline...</p>
+
+    <h3>URL:</h3>
+    <a id="articleUrl" href="#" target="_blank">Loading article URL...</a>
+
+    <h3>Description:</h3>
+    <p id="description">Loading description...</p>
+  </div>
+  
+  <!-- Article Summary -->
+  <div class="summary">
+    <h2>Article Summary:</h2>
+    <p id="summary">Loading summary...</p>
+  </div>
+  
+  <!-- Audio -->
+  <div class="audio">
+    <h2>Listen to the Audio:</h2>
+    <audio id="audioPlayer" controls>
+      <source id="audioSource" src="" type="audio/mp3">
+      Your browser does not support the audio element.
+    </audio>
+  </div>
+
+  <!-- Quiz Section -->
+  <div class="quiz" id="quiz">
+    <h2>Quiz:</h2>
+    <div id="quizQuestions">Loading quiz...</div>
+  </div>
+
+  <!-- Next Article Button -->
+  <div id="nextArticle" style="display:none;">
+    <button id="nextButton">Do another article</button>
+  </div>
+  <script>
+    let currentQuestionIndex = 0; 
+    let score = 0;
+    let totalQuestions = 0; 
+    let quizQuestions = []; 
+  
+    // Function to start the process
+    document.getElementById('startButton').addEventListener('click', function () {
+      document.getElementById('startScreen').style.display = 'none'; // Hide start button
+      document.getElementById('spinner').style.display = 'block'; // Show spinner
+      startProcess(); // Start the article and quiz process
+    });
+  
+    // Function to fetch new article and quiz again after completion
+    document.getElementById('nextButton').addEventListener('click', function () {
+      document.getElementById('nextArticle').style.display = 'none'; // Hide next button
+      document.getElementById('spinner').style.display = 'block'; // Show spinner
+      resetQuiz(); // Reset quiz variables
+      startProcess(); // Start the process again
+    });
+  
+    // Function to reset quiz state
+    function resetQuiz() {
+      currentQuestionIndex = 0;
+      score = 0;
+      document.querySelector('.article-details').style.display = 'none';
+      document.querySelector('.summary').style.display = 'none';
+      document.querySelector('.audio').style.display = 'none';
+      document.querySelector('.quiz').style.display = 'none';
+      document.getElementById('quizQuestions').innerHTML = ''; // Clear previous quiz questions
+  
+      // Reset the audio player
+      const audioPlayer = document.getElementById('audioPlayer');
+      const audioSource = document.getElementById('audioSource');
+      audioPlayer.pause(); // Stop any currently playing audio
+      audioSource.src = ''; // Clear the previous audio source
+      audioPlayer.load(); // Reset the audio player
+    }
+  
+    // Function to start the process (fetch article, generate summary, show quiz)
+    function startProcess() {
+      fetch('/process-article')
+        .then(response => response.json())
+        .then(data => {
+          // Hide spinner once data is loaded
+          document.getElementById('spinner').style.display = 'none';
+  
+          // Show article details and summary
+          document.querySelector('.article-details').style.display = 'block';
+          document.getElementById('headline').textContent = data.headline;
+          document.getElementById('articleUrl').href = data.articleUrl;
+          document.getElementById('articleUrl').textContent = data.articleUrl;
+          document.getElementById('description').textContent = data.description;
+          document.querySelector('.summary').style.display = 'block';
+          document.getElementById('summary').textContent = data.summary;
+  
+          // Set up audio for the current article
+          const audioPlayer = document.getElementById('audioPlayer');
+          const audioSource = document.getElementById('audioSource');
+          audioSource.src = `/${data.audioFile}`; // Set the new audio file source
+          audioPlayer.load(); // Load the new audio file
+          document.querySelector('.audio').style.display = 'block'; // Show the audio player
+  
+          // Debug: log the quiz questions to ensure they are being loaded
+          console.log('Quiz Questions from Server:', data.quizQuestions);
+  
+          // Set up quiz
+          if (data.quizQuestions) {
+            quizQuestions = data.quizQuestions.split('\n\n'); 
+            totalQuestions = quizQuestions.length;
+  
+            // Debug: log parsed quiz questions
+            console.log('Parsed Quiz Questions:', quizQuestions);
+  
+            if (quizQuestions.length > 0) {
+              document.querySelector('.quiz').style.display = 'block'; // Show quiz
+              displayQuestion(); // Start displaying questions
+            } else {
+              document.getElementById('quizQuestions').textContent = 'No quiz questions available.';
+            }
+          } else {
+            document.getElementById('quizQuestions').textContent = 'Failed to load quiz.';
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching article data:', error);
+          document.getElementById('spinner').style.display = 'none'; // Hide spinner if an error occurs
+          document.getElementById('quizQuestions').textContent = 'Failed to load quiz.';
+        });
+    }
+  
+    // Display each quiz question one at a time
+    function displayQuestion() {
+      const questionDiv = document.getElementById('quizQuestions');
+      questionDiv.innerHTML = ''; // Clear out previous question and answers
+  
+      if (currentQuestionIndex < totalQuestions) {
+        const currentQuestion = quizQuestions[currentQuestionIndex].split('\n');
+        const questionText = currentQuestion[0];
+        const answers = currentQuestion.slice(1, 5);
+        const correctAnswer = currentQuestion[currentQuestion.length - 1].split(': ')[1].trim();
+  
+        // Debug: log current question and correct answer
+        console.log('Current Question:', questionText);
+        console.log('Correct Answer:', correctAnswer);
+  
+        // Display question text
+        questionDiv.innerHTML = `<h3>${questionText}</h3>`;
+  
+        // Display answer buttons
+        answers.forEach((answer, index) => {
+          const answerButton = document.createElement('button');
+          answerButton.textContent = answer.trim(); // Trim any extra spaces in answers
+          answerButton.onclick = function() {
+            checkAnswer(answer.trim(), correctAnswer); // Trim spaces when comparing answers
+          };
+          questionDiv.appendChild(answerButton);
+          questionDiv.appendChild(document.createElement('br')); // Line break after each button
+        });
+      } else {
+        // Quiz complete
+        questionDiv.innerHTML = `
+          <h2>Quiz Complete!</h2>
+          <p>You scored ${score} out of ${totalQuestions}</p>
+          <p>Your percentage: ${(score / totalQuestions) * 100}%</p>
+        `;
+        document.getElementById('nextArticle').style.display = 'block'; // Show next article button
+      }
+    }
+  
+    // Function to check user's selected answer
+    function checkAnswer(selectedAnswer, correctAnswer) {
+      // Display both selected and correct answers in feedback
+      if (selectedAnswer === correctAnswer) {
+        alert(`Great job! You selected "${selectedAnswer}", which is correct.`);
+        score++;
+      } else {
+        alert(`Oops, you selected "${selectedAnswer}". The correct answer is: "${correctAnswer}".`);
+      }
+      currentQuestionIndex++;
+      displayQuestion();
+    }
+  </script>
+</body>
+</html>
