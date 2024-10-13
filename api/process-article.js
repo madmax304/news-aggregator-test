@@ -17,15 +17,14 @@ const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
 // Function to fetch article details (URL, headline) and filter for valid articles
 async function fetchArticleDetails() {
-  console.log("Fetching article details..."); // Debug log
+  const startTime = Date.now(); // Start timing
+  console.log("Fetching article details...");
+
   try {
     const response = await axios.get(`https://newsapi.org/v2/top-headlines?sources=the-verge&apiKey=${NEWS_API_KEY}`, {
       timeout: 8000 // Timeout for NewsAPI request
     });
     
-    // Log the NewsAPI response for debugging
-    console.log("NewsAPI Response:", response.data);
-
     const validArticles = response.data.articles.filter(article => {
       return article.url && article.url.includes('theverge.com') && article.url !== 'https://www.theverge.com';
     });
@@ -37,7 +36,8 @@ async function fetchArticleDetails() {
     const randomIndex = Math.floor(Math.random() * validArticles.length);
     const article = validArticles[randomIndex];
 
-    console.log("Selected article:", article); // Log the selected article
+    const endTime = Date.now(); // End timing
+    console.log(`Article details fetched in ${endTime - startTime}ms`); // Log timing
     return {
       url: article.url,
       headline: article.title,
@@ -51,26 +51,23 @@ async function fetchArticleDetails() {
 
 // Function to summarize the article using OpenAI
 async function summarizeArticle(articleUrl) {
-  console.log("Summarizing article from URL:", articleUrl); // Debug log
-  try {
-    const { data } = await axios.get(articleUrl, { timeout: 8000 }); // Add timeout for article fetching
-    const $ = cheerio.load(data);
-    const articleText = $('p').text().trim(); // Extracting article text
+  const startTime = Date.now(); // Start timing
+  console.log("Summarizing article from URL:", articleUrl);
 
-    if (!articleText) {
-      throw new Error('Failed to extract article text.'); // Error if no text is found
-    }
+  try {
+    const { data } = await axios.get(articleUrl, { timeout: 8000 });
+    const $ = cheerio.load(data);
+    const articleText = $('p').text().trim();
 
     const response = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
-      messages: [
-        { role: 'user', content: `Please summarize the following article in detail: ${articleText}` }
-      ],
+      messages: [{ role: 'user', content: `Please summarize the following article in detail: ${articleText}` }],
       max_tokens: 1000,
     });
 
     const summary = response.choices[0].message.content.trim();
-    console.log("Generated summary:", summary); // Debug log
+    const endTime = Date.now(); // End timing
+    console.log(`Article summarized in ${endTime - startTime}ms`); // Log timing
     return summary;
   } catch (error) {
     console.error('Error summarizing article:', error.message);
@@ -80,39 +77,39 @@ async function summarizeArticle(articleUrl) {
 
 // Function to convert the summary into speech using Eleven Labs TTS
 async function convertSummaryToSpeech(summary) {
-  console.log('Converting summary to speech:', summary);
-  try {
-    const response = await axios.post(
-      `https://api.elevenlabs.io/v1/text-to-speech/${ELEVEN_LABS_VOICE_ID}`,  
-      {
-        text: summary,
-        voice_settings: { stability: 1.0, similarity_boost: 1.0 }
-      },
-      {
-        headers: {
-          'xi-api-key': ELEVEN_LABS_API_KEY,
-          'Content-Type': 'application/json'
+    console.log('Converting summary to speech:', summary);
+    const startTime = Date.now(); // Start timing
+    try {
+      const response = await axios.post(
+        `https://api.elevenlabs.io/v1/text-to-speech/${ELEVEN_LABS_VOICE_ID}`,  
+        {
+          text: summary,
+          voice_settings: { stability: 1.0, similarity_boost: 1.0 }
         },
-        responseType: 'arraybuffer',
-        timeout: 8000  // 8-second timeout
-      }
-    );
-    console.log('Eleven Labs API response status:', response.status);
-    
-    const writeFile = util.promisify(fs.writeFile);
-    await writeFile('output.mp3', response.data, 'binary');
-    console.log('Audio content written to file: output.mp3');
-    
-    return 'output.mp3';  
-  } catch (error) {
-    console.error('Error from Eleven Labs API:', error.response ? error.response.data : error.message);
-    throw new Error('Failed to convert summary to speech.');
-  }
-}
+        {
+          headers: {
+            'xi-api-key': ELEVEN_LABS_API_KEY,
+            'Content-Type': 'application/json'
+          },
+          responseType: 'arraybuffer',
+          timeout: 8000  // 8-second timeout
+        }
+      );
+      const endTime = Date.now(); // End timing
+      console.log(`Text-to-speech conversion took ${endTime - startTime}ms`); // Log timing
 
+      const writeFile = util.promisify(fs.writeFile);
+      await writeFile('output.mp3', response.data, 'binary');
+      return 'output.mp3';  
+    } catch (error) {
+      console.error('Error from Eleven Labs API:', error.response ? error.response.data : error.message);
+      throw new Error('Failed to convert summary to speech.');
+    }
+  }
 // Function to generate quiz questions based on the article summary
 async function generateQuizQuestions(summary) {
   console.log("Generating quiz questions..."); // Debug log
+  const startTime = Date.now(); // Start timing
   try {
     const response = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
@@ -126,7 +123,8 @@ async function generateQuizQuestions(summary) {
     });
 
     const quizQuestions = response.choices[0].message.content.trim();
-    console.log("Generated quiz questions:", quizQuestions); // Debug log
+    const endTime = Date.now(); // End timing
+    console.log(`Quiz questions generated in ${endTime - startTime}ms`); // Log timing
     return quizQuestions;
   } catch (error) {
     console.error('Error generating quiz questions:', error.message);
@@ -138,24 +136,11 @@ async function generateQuizQuestions(summary) {
 module.exports = async (req, res) => {
   try {
     console.log('Received request to /process-article'); // Debug log
-    
-    // Step 1: Fetch article details
     const articleDetails = await fetchArticleDetails();
-    console.log("Article details fetched:", articleDetails);
-
-    // Step 2: Summarize the article
     const summary = await summarizeArticle(articleDetails.url);
-    console.log("Article summary generated:", summary);
-
-    // Step 3: Convert the summary to audio
     const audioFile = await convertSummaryToSpeech(summary);
-    console.log("Audio file generated:", audioFile);
-
-    // Step 4: Generate quiz questions
     const quizQuestions = await generateQuizQuestions(summary);
-    console.log("Quiz questions generated:", quizQuestions);
 
-    // Return all data to the frontend
     res.json({
       articleUrl: articleDetails.url,
       headline: articleDetails.headline,
