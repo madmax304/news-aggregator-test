@@ -17,10 +17,15 @@ const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
 // Function to fetch article details (URL, headline) and filter for valid articles
 async function fetchArticleDetails() {
+  console.log("Fetching article details..."); // Debug log
   try {
-    const response = await axios.get(`https://newsapi.org/v2/top-headlines?sources=the-verge&apiKey=${NEWS_API_KEY}`);
+    const response = await axios.get(`https://newsapi.org/v2/top-headlines?sources=the-verge&apiKey=${NEWS_API_KEY}`, {
+      timeout: 8000 // Timeout for NewsAPI request
+    });
     
-    // Filter for valid articles (skip homepage URLs)
+    // Log the NewsAPI response for debugging
+    console.log("NewsAPI Response:", response.data);
+
     const validArticles = response.data.articles.filter(article => {
       return article.url && article.url.includes('theverge.com') && article.url !== 'https://www.theverge.com';
     });
@@ -29,10 +34,10 @@ async function fetchArticleDetails() {
       throw new Error('No valid articles found.');
     }
 
-    // Randomly select a valid article from the filtered list
     const randomIndex = Math.floor(Math.random() * validArticles.length);
     const article = validArticles[randomIndex];
 
+    console.log("Selected article:", article); // Log the selected article
     return {
       url: article.url,
       headline: article.title,
@@ -46,8 +51,9 @@ async function fetchArticleDetails() {
 
 // Function to summarize the article using OpenAI
 async function summarizeArticle(articleUrl) {
+  console.log("Summarizing article from URL:", articleUrl); // Debug log
   try {
-    const { data } = await axios.get(articleUrl);
+    const { data } = await axios.get(articleUrl, { timeout: 8000 }); // Add timeout for article fetching
     const $ = cheerio.load(data);
     const articleText = $('p').text().trim(); // Extracting article text
 
@@ -60,6 +66,7 @@ async function summarizeArticle(articleUrl) {
     });
 
     const summary = response.choices[0].message.content.trim();
+    console.log("Generated summary:", summary); // Debug log
     return summary;
   } catch (error) {
     console.error('Error summarizing article:', error.message);
@@ -69,6 +76,7 @@ async function summarizeArticle(articleUrl) {
 
 // Function to convert the summary into speech using Eleven Labs TTS
 async function convertSummaryToSpeech(summary) {
+  console.log("Converting summary to speech..."); // Debug log
   try {
     const response = await axios.post(
       `https://api.elevenlabs.io/v1/text-to-speech/${ELEVEN_LABS_VOICE_ID}`,  
@@ -81,12 +89,14 @@ async function convertSummaryToSpeech(summary) {
           'xi-api-key': ELEVEN_LABS_API_KEY,
           'Content-Type': 'application/json'
         },
-        responseType: 'arraybuffer'
+        responseType: 'arraybuffer',
+        timeout: 8000 // Timeout for TTS API call
       }
     );
 
     const writeFile = util.promisify(fs.writeFile);
     await writeFile('output.mp3', response.data, 'binary');
+    console.log("Audio content written to file: output.mp3"); // Debug log
     return 'output.mp3';  
   } catch (error) {
     console.error('Error converting summary to speech:', error.message);
@@ -96,6 +106,7 @@ async function convertSummaryToSpeech(summary) {
 
 // Function to generate quiz questions based on the article summary
 async function generateQuizQuestions(summary) {
+  console.log("Generating quiz questions..."); // Debug log
   try {
     const response = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
@@ -109,6 +120,7 @@ async function generateQuizQuestions(summary) {
     });
 
     const quizQuestions = response.choices[0].message.content.trim();
+    console.log("Generated quiz questions:", quizQuestions); // Debug log
     return quizQuestions;
   } catch (error) {
     console.error('Error generating quiz questions:', error.message);
@@ -119,19 +131,12 @@ async function generateQuizQuestions(summary) {
 // Handle the process-article request
 module.exports = async (req, res) => {
   try {
-    // Step 1: Fetch article details
+    console.log('Received request to /process-article'); // Debug log
     const articleDetails = await fetchArticleDetails();
-
-    // Step 2: Summarize the article
     const summary = await summarizeArticle(articleDetails.url);
-
-    // Step 3: Convert the summary to audio
     const audioFile = await convertSummaryToSpeech(summary);
-
-    // Step 4: Generate quiz questions
     const quizQuestions = await generateQuizQuestions(summary);
 
-    // Return all data to the frontend
     res.json({
       articleUrl: articleDetails.url,
       headline: articleDetails.headline,
