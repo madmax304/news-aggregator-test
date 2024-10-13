@@ -1,4 +1,4 @@
-require('dotenv').config(); // Import dotenv once
+require('dotenv').config(); // Import dotenv
 
 const express = require('express');
 const axios = require('axios');
@@ -9,9 +9,11 @@ const util = require('util');
 const path = require('path');
 
 const app = express();
-require('dotenv').config();
 
+// Set the port based on environment
 const PORT = process.env.PORT || 3000;
+
+// Load environment variables
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const NEWS_API_KEY = process.env.NEWS_API_KEY;
 const ELEVEN_LABS_API_KEY = process.env.ELEVEN_LABS_API_KEY;
@@ -21,34 +23,35 @@ const ELEVEN_LABS_VOICE_ID = process.env.ELEVEN_LABS_VOICE_ID;
 app.use(express.static(path.join(__dirname)));
 
 // Initialize OpenAI with the API key
-const openai = new OpenAI({
-  apiKey: OPENAI_API_KEY
-});
+const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
 // Serve the HTML page
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
+// Dynamic API URL handling
+const getBaseUrl = () => {
+  // Detect if running in production (on GitHub Pages or a live domain)
+  if (process.env.NODE_ENV === 'production') {
+    return 'https://test.knewsfeed.com'; // Set your production base URL
+  }
+  return `http://localhost:${PORT}`; // Default to localhost for development
+};
+
 // Function to fetch article details (URL, headline) and filter for valid articles
 async function fetchArticleDetails() {
   try {
     const response = await axios.get(`https://newsapi.org/v2/top-headlines?sources=the-verge&apiKey=${NEWS_API_KEY}`);
     
-    // Log the API response for debugging purposes
-    console.log('NewsAPI Response:', response.data);
-
     if (!response.data || response.data.articles.length === 0) {
       throw new Error('No articles found from NewsAPI.');
     }
 
-    // Filter for a valid article (with a non-homepage URL and content)
+    // Filter for valid articles (skip homepage URLs)
     const validArticles = response.data.articles.filter(article => {
       return article.url && article.url.includes('theverge.com') && article.url !== 'https://www.theverge.com';
     });
-
-    // Log the valid articles for debugging purposes
-    console.log('Valid Articles:', validArticles);
 
     if (validArticles.length === 0) {
       throw new Error('No valid articles found.');
@@ -61,10 +64,10 @@ async function fetchArticleDetails() {
     return {
       url: article.url,
       headline: article.title,
-      description: article.description
+      description: article.description,
     };
   } catch (error) {
-    console.error('Error fetching article details from NewsAPI:', error.message);
+    console.error('Error fetching article details:', error.message);
     throw new Error('Failed to fetch valid article details.');
   }
 }
@@ -74,15 +77,12 @@ async function summarizeArticle(articleUrl) {
   try {
     const { data } = await axios.get(articleUrl);
     const $ = cheerio.load(data);
-    const articleText = $('p').text().trim(); // Extracting article text
+    const articleText = $('p').text().trim();
 
     const response = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
       messages: [
-        {
-          role: 'user',
-          content: `Please summarize the following article in detail: ${articleText}`
-        }
+        { role: 'user', content: `Please summarize the following article in detail: ${articleText}` }
       ],
       max_tokens: 1000,
     });
@@ -104,10 +104,7 @@ async function convertSummaryToSpeech(summary) {
       `https://api.elevenlabs.io/v1/text-to-speech/${ELEVEN_LABS_VOICE_ID}`,  
       {
         text: summary,
-        voice_settings: {
-          stability: 1.0,
-          similarity_boost: 1.0
-        }
+        voice_settings: { stability: 1.0, similarity_boost: 1.0 }
       },
       {
         headers: {
@@ -125,7 +122,7 @@ async function convertSummaryToSpeech(summary) {
     return 'output.mp3';  
   } catch (error) {
     console.error('Error converting summary to speech:', error.message);
-    throw new Error('Failed to convert summary to speech using Eleven Labs.');
+    throw new Error('Failed to convert summary to speech.');
   }
 }
 
@@ -155,19 +152,12 @@ async function generateQuizQuestions(summary) {
 // Route to fetch article, generate summary, audio, and quiz
 app.get('/process-article', async (req, res) => {
   try {
-    // Step 1: Fetch article details
     const articleDetails = await fetchArticleDetails();
-
-    // Step 2: Generate the summary
     const summary = await summarizeArticle(articleDetails.url);
-
-    // Step 3: Convert the summary to audio
     const audioFile = await convertSummaryToSpeech(summary);
-
-    // Step 4: Generate quiz questions
     const quizQuestions = await generateQuizQuestions(summary);
 
-    // Step 5: Return all data to the frontend
+    // Return all data to the frontend
     res.json({
       articleUrl: articleDetails.url,
       headline: articleDetails.headline,
