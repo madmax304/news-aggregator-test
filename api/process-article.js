@@ -57,6 +57,10 @@ async function summarizeArticle(articleUrl) {
     const $ = cheerio.load(data);
     const articleText = $('p').text().trim(); // Extracting article text
 
+    if (!articleText) {
+      throw new Error('Failed to extract article text.'); // Error if no text is found
+    }
+
     const response = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
       messages: [
@@ -76,34 +80,36 @@ async function summarizeArticle(articleUrl) {
 
 // Function to convert the summary into speech using Eleven Labs TTS
 async function convertSummaryToSpeech(summary) {
-    console.log('Converting summary to speech:', summary);
-    try {
-      const response = await axios.post(
-        `https://api.elevenlabs.io/v1/text-to-speech/${ELEVEN_LABS_VOICE_ID}`,  
-        {
-          text: summary,
-          voice_settings: { stability: 1.0, similarity_boost: 1.0 }
+  console.log('Converting summary to speech:', summary);
+  try {
+    const response = await axios.post(
+      `https://api.elevenlabs.io/v1/text-to-speech/${ELEVEN_LABS_VOICE_ID}`,  
+      {
+        text: summary,
+        voice_settings: { stability: 1.0, similarity_boost: 1.0 }
+      },
+      {
+        headers: {
+          'xi-api-key': ELEVEN_LABS_API_KEY,
+          'Content-Type': 'application/json'
         },
-        {
-          headers: {
-            'xi-api-key': ELEVEN_LABS_API_KEY,
-            'Content-Type': 'application/json'
-          },
-          responseType: 'arraybuffer',
-          timeout: 8000  // 8-second timeout
-        }
-      );
-      console.log('Eleven Labs API response:', response.status);
-      const writeFile = util.promisify(fs.writeFile);
-      await writeFile('output.mp3', response.data, 'binary');
-      console.log('Audio content written to file: output.mp3');
-      
-      return 'output.mp3';  
-    } catch (error) {
-      console.error('Error from Eleven Labs API:', error.response ? error.response.data : error.message);
-      throw new Error('Failed to convert summary to speech.');
-    }
+        responseType: 'arraybuffer',
+        timeout: 8000  // 8-second timeout
+      }
+    );
+    console.log('Eleven Labs API response status:', response.status);
+    
+    const writeFile = util.promisify(fs.writeFile);
+    await writeFile('output.mp3', response.data, 'binary');
+    console.log('Audio content written to file: output.mp3');
+    
+    return 'output.mp3';  
+  } catch (error) {
+    console.error('Error from Eleven Labs API:', error.response ? error.response.data : error.message);
+    throw new Error('Failed to convert summary to speech.');
   }
+}
+
 // Function to generate quiz questions based on the article summary
 async function generateQuizQuestions(summary) {
   console.log("Generating quiz questions..."); // Debug log
@@ -132,11 +138,24 @@ async function generateQuizQuestions(summary) {
 module.exports = async (req, res) => {
   try {
     console.log('Received request to /process-article'); // Debug log
+    
+    // Step 1: Fetch article details
     const articleDetails = await fetchArticleDetails();
-    const summary = await summarizeArticle(articleDetails.url);
-    const audioFile = await convertSummaryToSpeech(summary);
-    const quizQuestions = await generateQuizQuestions(summary);
+    console.log("Article details fetched:", articleDetails);
 
+    // Step 2: Summarize the article
+    const summary = await summarizeArticle(articleDetails.url);
+    console.log("Article summary generated:", summary);
+
+    // Step 3: Convert the summary to audio
+    const audioFile = await convertSummaryToSpeech(summary);
+    console.log("Audio file generated:", audioFile);
+
+    // Step 4: Generate quiz questions
+    const quizQuestions = await generateQuizQuestions(summary);
+    console.log("Quiz questions generated:", quizQuestions);
+
+    // Return all data to the frontend
     res.json({
       articleUrl: articleDetails.url,
       headline: articleDetails.headline,
