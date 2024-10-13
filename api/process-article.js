@@ -76,34 +76,34 @@ async function summarizeArticle(articleUrl) {
 
 // Function to convert the summary into speech using Eleven Labs TTS
 async function convertSummaryToSpeech(summary) {
-  console.log("Converting summary to speech..."); // Debug log
-  try {
-    const response = await axios.post(
-      `https://api.elevenlabs.io/v1/text-to-speech/${ELEVEN_LABS_VOICE_ID}`,  
-      {
-        text: summary,
-        voice_settings: { stability: 1.0, similarity_boost: 1.0 }
-      },
-      {
-        headers: {
-          'xi-api-key': ELEVEN_LABS_API_KEY,
-          'Content-Type': 'application/json'
+    console.log('Converting summary to speech:', summary);
+    try {
+      const response = await axios.post(
+        `https://api.elevenlabs.io/v1/text-to-speech/${ELEVEN_LABS_VOICE_ID}`,  
+        {
+          text: summary,
+          voice_settings: { stability: 1.0, similarity_boost: 1.0 }
         },
-        responseType: 'arraybuffer',
-        timeout: 8000 // Timeout for TTS API call
-      }
-    );
-
-    const writeFile = util.promisify(fs.writeFile);
-    await writeFile('output.mp3', response.data, 'binary');
-    console.log("Audio content written to file: output.mp3"); // Debug log
-    return 'output.mp3';  
-  } catch (error) {
-    console.error('Error converting summary to speech:', error.message);
-    throw new Error('Failed to convert summary to speech.');
+        {
+          headers: {
+            'xi-api-key': ELEVEN_LABS_API_KEY,
+            'Content-Type': 'application/json'
+          },
+          responseType: 'arraybuffer',
+          timeout: 8000  // 8-second timeout
+        }
+      );
+      console.log('Eleven Labs API response:', response.status);
+      const writeFile = util.promisify(fs.writeFile);
+      await writeFile('output.mp3', response.data, 'binary');
+      console.log('Audio content written to file: output.mp3');
+      
+      return 'output.mp3';  
+    } catch (error) {
+      console.error('Error from Eleven Labs API:', error.response ? error.response.data : error.message);
+      throw new Error('Failed to convert summary to speech.');
+    }
   }
-}
-
 // Function to generate quiz questions based on the article summary
 async function generateQuizQuestions(summary) {
   console.log("Generating quiz questions..."); // Debug log
