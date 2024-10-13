@@ -1,0 +1,8 @@
+{
+    "routes": [
+      {
+        "src": "/process-article",
+        "dest": "/api/process-article"
+      }
+    ]
+  }

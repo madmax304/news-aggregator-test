@@ -127,7 +127,7 @@
     function startProcess() {
   console.log('Starting process...'); // Log start
 
-  fetch('/process-article')
+  fetch('/api/process-article')
     .then(response => {
       console.log('Received response from server:', response); // Log the response
       return response.json();
